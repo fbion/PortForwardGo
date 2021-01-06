@@ -43,7 +43,7 @@ func LoadUDPRules(i string){
 			}
 		case err = <-errc:
 				zlog.Error("[",i,"] ",err)
-				break
+				return
 		}
 
 		Setting.mu.RLock()
@@ -139,12 +139,14 @@ func ListenUDP(address string, clientc chan Conn,i string,er chan error) {
 	addr, err := net.ResolveUDPAddr("udp", address)
 	if err != nil {
 		er <- err
+		clientc <- nil
 		return
 	}
 	serv, err := net.ListenUDP("udp", addr)
 
 	if err != nil {
 		er <- err
+		clientc <- nil
 		return
 	}
 
@@ -209,9 +211,9 @@ func udp_copyIO(src,dest Conn,index string) {
 	userid = Setting.Config.Rules[index].UserID
 	if Setting.Config.Users[userid].Speed != -1{
 
-	bucket := ratelimit.New(Setting.Config.Users[userid].Speed * 128 * 2 * 1024)
+	bucket := ratelimit.New(Setting.Config.Users[userid].Speed * 128 * 1024)
 	Setting.mu.RUnlock()
-	r, _ = io.Copy(ratelimit.Writer(dest,bucket),ratelimit.Reader(src,bucket))
+	r, _ = io.Copy(ratelimit.Writer(dest,bucket),src)
 	}else{
 	Setting.mu.RUnlock()
 	r, _ = io.Copy(dest, src)
