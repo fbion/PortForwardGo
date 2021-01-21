@@ -86,13 +86,14 @@ func net_copyIO(src, dest net.Conn, index string) {
 
 	Setting.mu.RLock()
 	userid = Setting.Config.Rules[index].UserID
-	if Setting.Config.Users[userid].Speed != -1{
-		bucket := ratelimit.New(Setting.Config.Users[userid].Speed * 128 * 1024)
+	if Setting.Config.Users[userid].Speed != 0{
+	bucket := ratelimit.New(Setting.Config.Users[userid].Speed * 128 * 1024)
 	Setting.mu.RUnlock()
 	r, _ = io.Copy(ratelimit.Writer(dest,bucket),src)
 	}else{
 	Setting.mu.RUnlock()
-	r, _ = io.Copy(dest, src) 	}
+	r, _ = io.Copy(dest, src)
+    }
     Setting.mu.Lock()
 	NowUser :=Setting.Config.Users[userid]
 	NowUser.Used += r

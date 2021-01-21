@@ -217,8 +217,7 @@ func udp_copyIO(src,dest Conn,index string) {
 
 	Setting.mu.RLock()
 	userid = Setting.Config.Rules[index].UserID
-	if Setting.Config.Users[userid].Speed != -1{
-
+	if Setting.Config.Users[userid].Speed != 0{
 	bucket := ratelimit.New(Setting.Config.Users[userid].Speed * 128 * 1024)
 	Setting.mu.RUnlock()
 	r, _ = io.Copy(ratelimit.Writer(dest,bucket),src)
