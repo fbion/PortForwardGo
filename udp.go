@@ -43,8 +43,9 @@ func LoadUDPRules(i string){
 		case err = <-errc:
 			if err == nil {
 			    Setting.mu.RLock()
-		    	zlog.Info("Loaded [",i,"] (UDP)", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
-		    	Setting.mu.RUnlock()
+		    	zlog.Info("Loaded [",i,"] (UDP) ", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
+				Setting.mu.RUnlock()
+				continue
 			}else{
 				zlog.Error("Load failed [",i,"] (UDP) Error: ",err)
 				SendListenError(i)
