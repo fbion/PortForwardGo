@@ -10,12 +10,14 @@ import (
 
 var http_index map[string]string
 
+const Page503 = ""
+
 func HttpInit(){
 	http_index = make(map[string]string)
 	zlog.Info("[HTTP] Listening ",Setting.Config.Listen["Http"].Port)
 	l, err := net.Listen("tcp",":"+Setting.Config.Listen["Http"].Port)
 	if err != nil {
-		zlog.Error("[HTTP] ",err)
+		zlog.Error("[HTTP] Listen failed , Error: ",err)
 		return
 	}
 	for {
@@ -29,12 +31,14 @@ func HttpInit(){
 
 func LoadHttpRules(i string){
 	Setting.mu.RLock()
+	zlog.Info("Loaded [",i,"] (HTTPS)", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
 	http_index[strings.ToLower(Setting.Config.Rules[i].Listen)] = i
 	Setting.mu.RUnlock()
 }
 
 func DeleteHttpRules(i string){
 	Setting.mu.Lock()
+	zlog.Info("Deleted [",i,"] (HTTP)", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
 	delete(http_index,strings.ToLower(Setting.Config.Rules[i].Listen))
 	delete(Setting.Config.Rules,i)
 	Setting.mu.Unlock()
@@ -52,11 +56,16 @@ func http_handle(conn net.Conn) {
 		}
 		line := string(bytes)
 		readLines.PushBack(line)
-	    readLines.PushBack("X-Forward-For: "+ParseAddrToIP(conn.RemoteAddr().Network()))
+		
 		if line == "" {
 						break
 		}
-				if strings.HasPrefix(line, "Host: ") {
+
+		if strings.HasPrefix(line, "X-Forward-For: ") == false {
+			readLines.PushBack("X-Forward-For: "+ ParseAddrToIP(conn.RemoteAddr().String()))
+		}
+
+		if strings.HasPrefix(line, "Host: ") {
 			hostname = strings.ToLower((strings.TrimPrefix(line, "Host: ")))
 		}
 	}
@@ -67,7 +76,8 @@ func http_handle(conn net.Conn) {
 	}
 
 	i,ok := http_index[hostname]
-	if !ok{
+	if !ok {
+		conn.Write([]byte(Page503))
 		conn.Close()
 		return
 	}
@@ -75,6 +85,7 @@ func http_handle(conn net.Conn) {
 	Setting.mu.RLock()       	
 	_, ok = Setting.Config.Rules[i]
 	if !ok {
+		conn.Write([]byte(Page503))
 		conn.Close()
 		Setting.mu.RUnlock()
 		delete(http_index,i)
@@ -82,14 +93,12 @@ func http_handle(conn net.Conn) {
 	}
 	if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { 		Setting.mu.RUnlock()
 		conn.Close()
-		zlog.Info("Stop Port Forward (", i, ") [", strings.ToUpper(Setting.Config.Rules[i].Protocol), "]", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
-		updateConfig() 		
+		Setting.mu.RUnlock()	
 		return
 	}
 	if Setting.Config.Rules[i].Status != "Active" && Setting.Config.Rules[i].Status != "Created" {
 		Setting.mu.RUnlock()
 		conn.Close()
-		zlog.Info("Suspend Port Forward(", i, ") [", strings.ToUpper(Setting.Config.Rules[i].Protocol), "]", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
 		return
 	}
 	dest :=Setting.Config.Rules[i].Forward

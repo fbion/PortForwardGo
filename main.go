@@ -10,7 +10,6 @@ import (
 	"os"
 	"fmt"
 	"os/signal"
-	"strings"
 	"sync"
 	"syscall"
 	"crypto/md5"
@@ -22,9 +21,10 @@ import (
 
 var Setting CSafeRule
 
-const Version = "1.0.1"
+const Version = "1.1.0"
 
-var ConfigFileName string
+var ConfigFile string
+var LogFile string
 
 type CSafeRule struct {
 	Listener Listener
@@ -33,8 +33,10 @@ type CSafeRule struct {
 }
 
 type Listener struct{
-	UDP map[string]*net.UDPConn
 	TCP map[string]*net.TCPListener
+	UDP map[string]*net.UDPConn
+	WS map[string]*net.TCPListener
+	WSC map[string]*net.TCPListener
 }
 
 type Config struct{
@@ -74,7 +76,8 @@ type APIConfig struct {
 var apic APIConfig
 
 func main() {
-		flag.StringVar(&ConfigFileName, "config", "config.json", "The config filename")
+		flag.StringVar(&ConfigFile, "config", "config.json", "The config file location.")
+		flag.StringVar(&LogFile,"log","run.log","The log file location.")
 		help := flag.Bool("h", false, "Show help")
 		flag.Parse()
 
@@ -85,10 +88,15 @@ func main() {
 	
 
 		zlog.Info("Node Version: ",Version)
+		logfile_writer,err := os.OpenFile(LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+        if err == nil{
+		zlog.SetOutput(logfile_writer)
+		zlog.Info("Log file location: ",LogFile)
+		}
 
 		LoadMap()
 
-    apif, err := ioutil.ReadFile(ConfigFileName)
+    apif, err := ioutil.ReadFile(ConfigFile)
 		if err != nil {
 			zlog.Fatal("Cannot read the config file. (io Error) " + err.Error())
 		}
@@ -99,7 +107,6 @@ func main() {
 
     zlog.Info("API URL: ",apic.APIAddr)   
 	GetRules()
-	LoadListen()
 
 	for index, _ := range Setting.Config.Rules {
 		go func(index string){
@@ -191,6 +198,8 @@ func LoadMap(){
 	Setting.mu.Lock()
 	Setting.Listener.TCP = make(map[string]*net.TCPListener)
 	Setting.Listener.UDP = make(map[string]*net.UDPConn)
+	Setting.Listener.WS = make(map[string]*net.TCPListener)
+	Setting.Listener.WSC = make(map[string]*net.TCPListener)
 	Setting.mu.Unlock()
 }
 
@@ -210,7 +219,6 @@ func LoadListen(){
 func DeleteRules(i string){
 if _,ok := Setting.Config.Rules[i];ok{
 	Protocol := Setting.Config.Rules[i].Protocol
-	zlog.Info("Deleted[",i,"] (",strings.ToUpper(Protocol),")", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
 	if Protocol == "tcp" {
 		go DeleteTCPRules(i)
     }else if Protocol == "udp" {
@@ -219,22 +227,31 @@ if _,ok := Setting.Config.Rules[i];ok{
 		go DeleteHttpRules(i)
 	}else if Protocol == "https" {
 		go DeleteHttpsRules(i)
+	}else if Protocol == "ws" {
+		go DeleteWSRules(i)
+	}else if Protocol == "wsc" {
+		go DeleteWSCRules(i)
 	}
 }
 }
 
 func LoadNewRules(i string){
 	Protocol := Setting.Config.Rules[i].Protocol
-	zlog.Info("Loaded[",i,"] (",strings.ToUpper(Protocol),")", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
 
 	if Protocol == "tcp" {
-	LoadTCPRules(i)
+    	LoadTCPRules(i)
 	}else if Protocol == "udp" {
-	LoadUDPRules(i)
+    	LoadUDPRules(i)
 	}else if Protocol == "http" {
-	LoadHttpRules(i)
+	    LoadHttpRules(i)
 	}else if Protocol == "https" {
-	LoadHttpsRules(i)
+	    LoadHttpsRules(i)
+	}else if Protocol == "https" {
+		LoadHttpsRules(i)
+	}else if Protocol == "ws" {
+		LoadWSRules(i)
+	}else if Protocol == "wsc" {
+		LoadWSCRules(i)
 	}
 }
 
@@ -309,6 +326,17 @@ func saveConfig() {
 	zlog.Success("Save config Completed")
 }
 
+
+func SendListenError(i string){
+	jsonData,_ := json.Marshal(map[string]interface{}{
+		"Action" : "Error",
+		"NodeID" : apic.NodeID,
+		"Token" : md5_encode(apic.APIToken),
+		"RuleID" : i,
+	}) 
+	sendRequest(apic.APIAddr,bytes.NewReader(jsonData),nil,"POST")
+}
+
 func GetRules(){
 	var NewConfig Config
     Setting.mu.Lock()
@@ -340,6 +368,7 @@ func GetRules(){
 	Setting.Config = NewConfig
 	zlog.Info("Update Cycle: ",Setting.Config.UpdateInfoCycle," seconds")
 	Setting.mu.Unlock()
+	LoadListen()
 }
 
 func sendRequest(url string, body io.Reader, addHeaders map[string]string, method string) (statuscode int,resp []byte,err error) {

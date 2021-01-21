@@ -3,6 +3,7 @@ package zlog
 import (
 "fmt"
 "log"
+"io"
 ) 
 
 func main(){}
@@ -49,4 +50,8 @@ func PrintText(msg ... interface{}){
 		text = text + fmt.Sprintf("%v",txt)
 	}
 	log.Printf("\033[37m%s\033[0m\n",text)
+}
+
+func SetOutput(w io.Writer){
+	log.SetOutput(w)
 }

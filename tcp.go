@@ -4,50 +4,45 @@ import (
 	"PortForwardGo/zlog"
 	"net"
 	"io"
-	"strings"
 	"wego/util/ratelimit"
 	"time"
 )
 
 func LoadTCPRules(i string) {
-	Setting.mu.RLock()
+	Setting.mu.Lock()
 	tcpaddress, _ := net.ResolveTCPAddr("tcp", ":"+Setting.Config.Rules[i].Listen)
-	Setting.mu.RUnlock()
 	ln, err := net.ListenTCP("tcp", tcpaddress)
-	if err != nil {
-		zlog.Error("[",i,"] ",err)
+	if err == nil {
+		zlog.Info("Loaded [",i,"] (TCP)", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
+	}else{
+		zlog.Error("Load failed [",i,"] (TCP) Error: ",err)
+		SendListenError(i)
+		Setting.mu.Unlock()
 		return
 	}
-	Setting.mu.Lock()
 	Setting.Listener.TCP[i] = ln
 	Setting.mu.Unlock()
 	for {
 		conn, err := ln.Accept()
+		
+		if err != nil {
+		   continue
+	   }
+
 		Setting.mu.RLock()
 		_, ok := Setting.Config.Rules[i]
 		if !ok {
 			Setting.mu.RUnlock()
 			break
 		}
-		if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { 			Setting.mu.RUnlock()
-			zlog.Info("Stop Port Forward (", i, ") [", strings.ToUpper(Setting.Config.Rules[i].Protocol), "]", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
-			if err == nil {
-				_ = conn.Close()
-			}
-			updateConfig()
+		if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { 			
+			Setting.mu.RUnlock()
+			conn.Close()
 			continue
 		}
 		if Setting.Config.Rules[i].Status != "Active" && Setting.Config.Rules[i].Status != "Created" {
 			Setting.mu.RUnlock()
-			zlog.Info("Suspend Port Forward(", i, ") [", strings.ToUpper(Setting.Config.Rules[i].Protocol), "]", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
-			if err == nil {
-				_ = conn.Close()
-			}
-			continue
-		}
-
-		if err != nil {
-     		Setting.mu.RUnlock()
+			conn.Close()
 			continue
 		}
 
@@ -65,6 +60,7 @@ func DeleteTCPRules(i string){
 		}
 	}
 	Setting.mu.Lock()
+	zlog.Info("Deleted [",i,"] (TCP)", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
 	delete(Setting.Config.Rules,i)
 	delete(Setting.Listener.TCP,i)
 	Setting.mu.Unlock()

@@ -5,7 +5,6 @@ import (
 	"net"
 	"time"
 	"io"
-	"strings"
 	"PortForwardGo/zlog"
 	"wego/util/ratelimit"
 )
@@ -42,8 +41,15 @@ func LoadUDPRules(i string){
 				continue
 			}
 		case err = <-errc:
-				zlog.Error("[",i,"] ",err)
+			if err == nil {
+			    Setting.mu.RLock()
+		    	zlog.Info("Loaded [",i,"] (UDP)", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
+		    	Setting.mu.RUnlock()
+			}else{
+				zlog.Error("Load failed [",i,"] (UDP) Error: ",err)
+				SendListenError(i)
 				return
+			}
 		}
 
 		Setting.mu.RLock()
@@ -55,13 +61,12 @@ func LoadUDPRules(i string){
 
 		if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { // Check the quota
 			Setting.mu.RUnlock()
-			zlog.Info("Stop Port Forward (", i, ") [", strings.ToUpper(Setting.Config.Rules[i].Protocol), "]", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
-			updateConfig()
+			ln.Close()
 			continue
 		}
 		if Setting.Config.Rules[i].Status != "Active" && Setting.Config.Rules[i].Status != "Created" {
 			Setting.mu.RUnlock()
-			zlog.Info("Suspend Port Forward(", i, ") [", strings.ToUpper(Setting.Config.Rules[i].Protocol), "]", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
+			ln.Close()
 			continue
 		}
 		go udp_handleRequest(ln,i,Setting.Config.Rules[i])
@@ -79,6 +84,7 @@ func DeleteUDPRules(i string){
 	}
     }
 	Setting.mu.Lock()
+	zlog.Info("Deleted [",i,"] (UDP)", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
 	delete(Setting.Config.Rules,i)
 	delete(Setting.Listener.UDP,i)
 	Setting.mu.Unlock()
@@ -149,6 +155,8 @@ func ListenUDP(address string, clientc chan Conn,i string,er chan error) {
 		clientc <- nil
 		return
 	}
+
+	er <- nil
 
 	Setting.mu.Lock()
 	Setting.Listener.UDP[i] = serv

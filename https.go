@@ -1,7 +1,7 @@
 package main
 
 import (
-		"PortForwardGo/zlog"
+	"PortForwardGo/zlog"
 	"net"
 	"strings"
 )
@@ -13,7 +13,7 @@ func HttpsInit() {
 	zlog.Info("[HTTPS] Listening ",Setting.Config.Listen["Https"].Port)
 	l, err := net.Listen("tcp",":"+Setting.Config.Listen["Https"].Port)
 	if err != nil {
-		zlog.Error("[HTTPS] ",err)
+		zlog.Error("[HTTPS] Listen failed , Error: ",err)
 		return
 	}
 	for {
@@ -27,12 +27,14 @@ func HttpsInit() {
 
 func LoadHttpsRules(i string){
 	Setting.mu.RLock()
+	zlog.Info("Loaded [",i,"] (HTTPS)", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
 	https_index[strings.ToLower(Setting.Config.Rules[i].Listen)] = i
 	Setting.mu.RUnlock()
 }
 
 func DeleteHttpsRules(i string){
 	Setting.mu.Lock()
+	zlog.Info("Deleted [",i,"] (HTTPS)", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
 	delete(https_index,strings.ToLower(Setting.Config.Rules[i].Listen))
 	delete(Setting.Config.Rules,i)
 	Setting.mu.Unlock()
@@ -157,16 +159,15 @@ func https_handle(conn net.Conn) {
 		delete(https_index,i)
 		return
 	}
-	if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { 		Setting.mu.RUnlock()
-		conn.Close()
-		zlog.Info("Stop Port Forward (", i, ") [", strings.ToUpper(Setting.Config.Rules[i].Protocol), "]", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
-		updateConfig() 		
+
+	if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota {
+		Setting.mu.RUnlock()
+		conn.Close()	
 		return
 	}
 	if Setting.Config.Rules[i].Status != "Active" && Setting.Config.Rules[i].Status != "Created" {
 		Setting.mu.RUnlock()
 		conn.Close()
-		zlog.Info("Suspend Port Forward(", i, ") [", strings.ToUpper(Setting.Config.Rules[i].Protocol), "]", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
 		return
 	}
 	dest :=Setting.Config.Rules[i].Forward

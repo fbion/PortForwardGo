@@ -4,6 +4,7 @@ import (
 "fmt"
 "log"
 "syscall"
+"io"
 ) 
 
 func main(){}
@@ -92,4 +93,8 @@ func WinColorLogFatal(i int,v ... interface{}) { //设置终端字体颜色
     handle, _, _ = proc.Call(uintptr(syscall.Stdout), uintptr(7))
     CloseHandle := kernel32.NewProc("CloseHandle")
     CloseHandle.Call(handle)
+}
+
+func SetOutput(w io.Writer){
+	log.SetOutput(w)
 }
