@@ -24,8 +24,6 @@ type Conn interface {
 }
 
 func LoadUDPRules(i string){
-	clientc := make(chan Conn)
-
 	Setting.mu.Lock()
 
 	addr, _ := net.ResolveUDPAddr("udp", ":"+Setting.Config.Rules[i].Listen)
@@ -43,37 +41,54 @@ func LoadUDPRules(i string){
 	Setting.Listener.UDP[i] = serv
 	Setting.mu.Unlock()
 
-	go ListenUDP(serv, clientc, i)
-
+	
+	table := make(map[string]*UDPDistribute)
 	for {
-		var ln Conn = nil
-		select {
-		case ln = <-clientc:
-			if ln == nil {
-				continue
-			}else{
-	     	Setting.mu.RLock()
-	    	_, ok := Setting.Config.Rules[i]
-	    	if !ok {
-	       		Setting.mu.RUnlock()
-			    return
-	    	}
-
-	    	if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { // Check the quota
-	    		Setting.mu.RUnlock()
-		    	ln.Close()
-			    continue
-	    	}
-		    if Setting.Config.Rules[i].Status != "Active" && Setting.Config.Rules[i].Status != "Created" {
-		    	Setting.mu.RUnlock()
-				ln.Close()
-				continue
-			}
-			go udp_handleRequest(ln,i,Setting.Config.Rules[i])
-		
+		Setting.mu.RLock()
+		_, ok := Setting.Config.Rules[i]
+		if !ok {
 			Setting.mu.RUnlock()
+			return
+		}
+		Setting.mu.RUnlock()
+
+		serv.SetDeadline(time.Now().Add(16 * time.Second))
+
+		buf := make([]byte, 32 * 1024)
+		n, addr, err := serv.ReadFrom(buf)
+		if err != nil {
+			continue
+		}
+		buf = buf[:n]
+
+		if d, ok := table[addr.String()]; ok {
+			if d.Established {
+				d.Cache <- buf
+				continue
+			} else {
+				delete(table, addr.String())
 			}
 		}
+		conn := NewUDPDistribute(serv, addr)
+		table[addr.String()] = conn
+		conn.Cache <- buf
+
+		Setting.mu.RLock()
+
+	    if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { // Check the quota
+	    	Setting.mu.RUnlock()
+		    conn.Close()
+			continue
+	    }
+		if Setting.Config.Rules[i].Status != "Active" && Setting.Config.Rules[i].Status != "Created" {
+		   	Setting.mu.RUnlock()
+			conn.Close()
+			continue
+		}
+		go udp_handleRequest(conn,i,Setting.Config.Rules[i])
+		
+		Setting.mu.RUnlock()
+		
 	}
 }
 		
@@ -141,39 +156,6 @@ func (this *UDPDistribute) Write(b []byte) (n int, err error) {
 
 func (this *UDPDistribute) RemoteAddr() (net.Addr) {
 	return this.RAddr
-}
-
-func ListenUDP(serv *net.UDPConn,clientc chan Conn,i string) {
-
-	table := make(map[string]*UDPDistribute)
-
-	for {
-		serv.SetDeadline(time.Now().Add(16 * time.Second))
-
-		buf := make([]byte, 32 * 1024)
-		n, addr, err := serv.ReadFrom(buf)
-		if err != nil {
-			if err, ok := err.(net.Error); ok && err.Timeout() {
-				continue
-			}
-			clientc <- nil
-			return
-		}
-		buf = buf[:n]
-
-		if d, ok := table[addr.String()]; ok {
-			if d.Established {
-				d.Cache <- buf
-				continue
-			} else {
-				delete(table, addr.String())
-			}
-		}
-		conn := NewUDPDistribute(serv, addr)
-		table[addr.String()] = conn
-		conn.Cache <- buf
-		clientc <- conn
-	}
 }
 
 func ConnUDP(address string) (Conn, error) {
