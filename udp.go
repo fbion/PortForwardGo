@@ -24,29 +24,26 @@ type Conn interface {
 }
 
 func LoadUDPRules(i string){
-
 	clientc := make(chan Conn)
+
+	Setting.mu.Lock()
 
 	addr, _ := net.ResolveUDPAddr("udp", ":"+Setting.Config.Rules[i].Listen)
 	serv, err := net.ListenUDP("udp", addr)
 
 	if err == nil {
-		Setting.mu.RLock()
 		zlog.Info("Loaded [",i,"] (UDP) ", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
-		Setting.mu.RUnlock()
 	}else{
 		zlog.Error("Load failed [",i,"] (UDP) Error: ",err)
+		Setting.mu.Unlock()
 		SendListenError(i)
 		return
 	}
 
-	Setting.mu.Lock()
 	Setting.Listener.UDP[i] = serv
 	Setting.mu.Unlock()
 
-	Setting.mu.RLock()
 	go ListenUDP(serv, clientc, i)
-	Setting.mu.RUnlock()
 
 	for {
 		var ln Conn = nil
@@ -54,14 +51,12 @@ func LoadUDPRules(i string){
 		case ln = <-clientc:
 			if ln == nil {
 				continue
-			}
-		}
-				
+			}else{
 	     	Setting.mu.RLock()
 	    	_, ok := Setting.Config.Rules[i]
 	    	if !ok {
 	       		Setting.mu.RUnlock()
-			    break
+			    return
 	    	}
 
 	    	if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { // Check the quota
@@ -78,6 +73,8 @@ func LoadUDPRules(i string){
 		
 			Setting.mu.RUnlock()
 			}
+		}
+	}
 }
 		
 func DeleteUDPRules(i string){
