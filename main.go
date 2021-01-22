@@ -21,7 +21,7 @@ import (
 
 var Setting CSafeRule
 
-const Version = "1.1.5"
+const Version = "1.1.6"
 
 var ConfigFile string
 var LogFile string
@@ -332,6 +332,7 @@ func SendListenError(i string){
 		"Action" : "Error",
 		"NodeID" : apic.NodeID,
 		"Token" : md5_encode(apic.APIToken),
+		"Version" : Version,
 		"RuleID" : i,
 	}) 
 	sendRequest(apic.APIAddr,bytes.NewReader(jsonData),nil,"POST")
