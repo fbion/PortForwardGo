@@ -57,7 +57,7 @@ func WS_Handle(i string , ws *websocket.Conn){
 	}
 
 	dest := Setting.Config.Rules[i].Forward
-    Setting.mu.Unlock()
+    Setting.mu.RUnlock()
 
    conn,err := net.Dial("tcp",dest)
    if err != nil {

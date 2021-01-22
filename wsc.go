@@ -16,8 +16,8 @@ func LoadWSCRules(i string){
 		zlog.Info("Loaded [",i,"] (WebSocket Client) ", Setting.Config.Rules[i].Listen, " => ", Setting.Config.Rules[i].Forward)
 	}else{
 		zlog.Error("Load failed [",i,"] (WebSocket Client) Error:",err)
-		SendListenError(i)
 		Setting.mu.Unlock()
+		SendListenError(i)
 		return
 	}
 
@@ -26,6 +26,7 @@ func LoadWSCRules(i string){
 
 	for{
 		conn,err := ln.Accept()
+		
 		if err != nil {
 			continue
 		}
@@ -42,6 +43,8 @@ func LoadWSCRules(i string){
 			conn.Close()
 			continue
 		}
+
+		Setting.mu.RUnlock()
 
         dest := Setting.Config.Rules[i].Forward
 		ws,err :=websocket.Dial("ws://"+dest,"","http://"+dest)
