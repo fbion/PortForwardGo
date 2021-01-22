@@ -10,8 +10,6 @@ import (
 
 var http_index map[string]string
 
-const Page503 = ""
-
 func HttpInit(){
 	http_index = make(map[string]string)
 	zlog.Info("[HTTP] Listening ",Setting.Config.Listen["Http"].Port)
@@ -66,17 +64,22 @@ func http_handle(conn net.Conn) {
 		}
 
 		if strings.HasPrefix(line, "Host: ") {
-			hostname = strings.ToLower((strings.TrimPrefix(line, "Host: ")))
+			hostname = ParseHostToName(strings.TrimPrefix(line, "Host: "))
 		}
 	}
 	
 	if hostname == "" {
+		conn.Write([]byte(HttpHeader))
+		conn.Write([]byte("\n"))
+		conn.Write([]byte(Page503))
 		conn.Close()
 		return
 	}
 
 	i,ok := http_index[hostname]
 	if !ok {
+		conn.Write([]byte(HttpHeader))
+		conn.Write([]byte("\n"))
 		conn.Write([]byte(Page503))
 		conn.Close()
 		return
@@ -85,19 +88,29 @@ func http_handle(conn net.Conn) {
 	Setting.mu.RLock()       	
 	_, ok = Setting.Config.Rules[i]
 	if !ok {
+		
+		conn.Write([]byte(HttpHeader))
+		conn.Write([]byte("\n"))
 		conn.Write([]byte(Page503))
 		conn.Close()
 		Setting.mu.RUnlock()
 		delete(http_index,i)
 		return
 	}
-	if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { 		Setting.mu.RUnlock()
+	if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota {
+		Setting.mu.RUnlock()
+		conn.Write([]byte(HttpHeader))
+		conn.Write([]byte("\n"))
+		conn.Write([]byte(Page503))
 		conn.Close()
 		Setting.mu.RUnlock()	
 		return
 	}
 	if Setting.Config.Rules[i].Status != "Active" && Setting.Config.Rules[i].Status != "Created" {
 		Setting.mu.RUnlock()
+		conn.Write([]byte(HttpHeader))
+		conn.Write([]byte("\n"))
+		conn.Write([]byte(Page503))
 		conn.Close()
 		return
 	}
@@ -107,6 +120,9 @@ func http_handle(conn net.Conn) {
 
 	backend, error := net.Dial("tcp", dest)
 	if error != nil {
+		conn.Write([]byte(HttpHeader))
+		conn.Write([]byte("\n"))
+		conn.Write([]byte(Page522))
 		conn.Close()
 		return
 	}
@@ -137,8 +153,8 @@ func ParseAddrToIP(addr string) string {
 
 func ParseHostToName(host string) string {
 	if strings.Index(host,":") == -1{
-        return host
+        return strings.ToLower(host)
 	}else{
-    	return strings.Split(host,":")[0]
+    	return strings.ToLower(strings.Split(host,":")[0])
 	}
 }
