@@ -26,12 +26,18 @@ func LoadWSCRules(i string){
 
 	for{
 		conn,err := ln.Accept()
-		
+
+		Setting.mu.RLock()
+
+		if rule, ok := Setting.Config.Rules[i];!ok || rule.Status == "Deleted" {
+			Setting.mu.RUnlock()
+			break
+		}
+
 		if err != nil {
 			continue
 		}
 
-		Setting.mu.RLock()
 		if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { 			
 			Setting.mu.RUnlock()
 			conn.Close()

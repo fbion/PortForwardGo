@@ -45,11 +45,12 @@ func LoadUDPRules(i string){
 	table := make(map[string]*UDPDistribute)
 	for {
 		Setting.mu.RLock()
-		_, ok := Setting.Config.Rules[i]
-		if !ok {
+		
+		if 	rule, ok := Setting.Config.Rules[i];!ok || rule.Status == "Deleted" {
 			Setting.mu.RUnlock()
-			return
+			break
 		}
+
 		Setting.mu.RUnlock()
 
 		serv.SetDeadline(time.Now().Add(16 * time.Second))

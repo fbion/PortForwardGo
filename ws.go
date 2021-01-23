@@ -43,7 +43,7 @@ func DeleteWSRules(i string){
 
 func WS_Handle(i string , ws *websocket.Conn){
     Setting.mu.RLock()
-	
+
 	if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { 			
 		Setting.mu.RUnlock()
 		ws.Close()

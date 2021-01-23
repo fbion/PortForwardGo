@@ -25,16 +25,16 @@ func LoadTCPRules(i string) {
 	for {
 		conn, err := ln.Accept()
 		
-		if err != nil {
-		   continue
-	   }
-
 		Setting.mu.RLock()
-		_, ok := Setting.Config.Rules[i]
-		if !ok {
+		if rule, ok := Setting.Config.Rules[i];!ok || rule.Status == "Deleted" {
 			Setting.mu.RUnlock()
 			break
 		}
+
+		if err != nil {
+			continue
+		}
+
 		if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { 			
 			Setting.mu.RUnlock()
 			conn.Close()
