@@ -32,6 +32,7 @@ func LoadTCPRules(i string) {
 		}
 
 		if err != nil {
+			Setting.mu.RUnlock()
 			continue
 		}
 

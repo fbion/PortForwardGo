@@ -21,7 +21,7 @@ import (
 
 var Setting CSafeRule
 
-const Version = "1.1.9"
+const Version = "1.2.0"
 
 var ConfigFile string
 var LogFile string
