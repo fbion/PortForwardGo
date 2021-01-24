@@ -27,25 +27,16 @@ func LoadWSCRules(i string){
 	for{
 		conn,err := ln.Accept()
 
-		Setting.mu.RLock()
-
-		if rule, ok := Setting.Config.Rules[i];!ok || rule.Status == "Deleted" {
-			Setting.mu.RUnlock()
+		if err != nil {
+            if err, ok := err.(net.Error); ok && err.Timeout() {
+                continue
+            }
 			break
 		}
 
-		if err != nil {
-			Setting.mu.RUnlock()
-			continue
-		}
+		Setting.mu.RLock()
 
-		if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { 			
-			Setting.mu.RUnlock()
-			conn.Close()
-			continue
-		}
-
-		if Setting.Config.Rules[i].Status != "Active" && Setting.Config.Rules[i].Status != "Created" {
+		if Setting.Config.Users[rule.UserID].Used > Setting.Config.Users[rule.UserID].Quota { 			
 			Setting.mu.RUnlock()
 			conn.Close()
 			continue
@@ -53,8 +44,12 @@ func LoadWSCRules(i string){
 
 		Setting.mu.RUnlock()
 
-        dest := Setting.Config.Rules[i].Forward
-		ws,err :=websocket.Dial("ws://"+dest,"","http://"+dest)
+		if rule.Status != "Active" && rule.Status != "Created" {
+			conn.Close()
+			continue
+		}
+
+		ws,err :=websocket.Dial("ws://" + rule.Forward,"","http://" + rule.Forward)
 		if err != nil {
 			conn.Close()
 			continue

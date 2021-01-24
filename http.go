@@ -69,7 +69,7 @@ func http_handle(conn net.Conn) {
 	}
 	
 	if hostname == "" {
-		conn.Write([]byte(HttpHeader))
+		conn.Write([]byte(HttpStatus(503)))
 		conn.Write([]byte("\n"))
 		conn.Write([]byte(Page503))
 		conn.Close()
@@ -78,7 +78,7 @@ func http_handle(conn net.Conn) {
 
 	i,ok := http_index[hostname]
 	if !ok {
-		conn.Write([]byte(HttpHeader))
+		conn.Write([]byte(HttpStatus(503)))
 		conn.Write([]byte("\n"))
 		conn.Write([]byte(Page503))
 		conn.Close()
@@ -86,41 +86,31 @@ func http_handle(conn net.Conn) {
 	}
 
 	Setting.mu.RLock()       	
-	_, ok = Setting.Config.Rules[i]
-	if !ok {
-		
-		conn.Write([]byte(HttpHeader))
+	rule = Setting.Config.Rules[i]
+	
+	if Setting.Config.Users[rule.UserID].Used > Setting.Config.Users[rule.UserID].Quota {
+		Setting.mu.RUnlock()
+		conn.Write([]byte(HttpStatus(503)))
 		conn.Write([]byte("\n"))
 		conn.Write([]byte(Page503))
 		conn.Close()
 		Setting.mu.RUnlock()
-		delete(http_index,i)
 		return
 	}
-	if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota {
-		Setting.mu.RUnlock()
-		conn.Write([]byte(HttpHeader))
-		conn.Write([]byte("\n"))
-		conn.Write([]byte(Page503))
-		conn.Close()
-		Setting.mu.RUnlock()	
-		return
-	}
-	if Setting.Config.Rules[i].Status != "Active" && Setting.Config.Rules[i].Status != "Created" {
-		Setting.mu.RUnlock()
-		conn.Write([]byte(HttpHeader))
-		conn.Write([]byte("\n"))
-		conn.Write([]byte(Page503))
-		conn.Close()
-		return
-	}
-	dest :=Setting.Config.Rules[i].Forward
 
-    Setting.mu.RUnlock()
+	Setting.mu.RUnlock()
 
-	backend, error := net.Dial("tcp", dest)
+	if rule.Status != "Active" && rule.Status != "Created" {
+		conn.Write([]byte(HttpStatus(503)))
+		conn.Write([]byte("\n"))
+		conn.Write([]byte(Page503))
+		conn.Close()
+		return
+	}
+
+	backend, error := net.Dial("tcp", rule.Forward)
 	if error != nil {
-		conn.Write([]byte(HttpHeader))
+		conn.Write([]byte(HttpStatus(522)))
 		conn.Write([]byte("\n"))
 		conn.Write([]byte(Page522))
 		conn.Close()

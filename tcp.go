@@ -24,31 +24,31 @@ func LoadTCPRules(i string) {
 	Setting.mu.Unlock()
 	for {
 		conn, err := ln.Accept()
-		
-		Setting.mu.RLock()
-		if rule, ok := Setting.Config.Rules[i];!ok || rule.Status == "Deleted" {
-			Setting.mu.RUnlock()
-			break
-		}
 
 		if err != nil {
-			Setting.mu.RUnlock()
-			continue
+            if err, ok := err.(net.Error); ok && err.Timeout() {
+                continue
+            }
+			break
 		}
+		
+		Setting.mu.RLock()
+		rule := Setting.Config.Rules[i]
 
-		if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { 			
+		if Setting.Config.Users[rule.UserID].Used > Setting.Config.Users[rule.UserID].Quota { 			
 			Setting.mu.RUnlock()
 			conn.Close()
 			continue
 		}
-		if Setting.Config.Rules[i].Status != "Active" && Setting.Config.Rules[i].Status != "Created" {
-			Setting.mu.RUnlock()
-			conn.Close()
-			continue
-		}
 
-		go tcp_handleRequest(conn, i, Setting.Config.Rules[i])
 		Setting.mu.RUnlock()
+
+		if rule.Status != "Active" && rule.Status != "Created" {
+			conn.Close()
+			continue
+		}
+
+		go tcp_handleRequest(conn, i, rule)
 	}
 }
 

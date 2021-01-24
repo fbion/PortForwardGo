@@ -151,30 +151,23 @@ func https_handle(conn net.Conn) {
 		return
 	}
 
-	Setting.mu.RLock()       	
-	_, ok = Setting.Config.Rules[i]
-	if !ok {
-		conn.Close()
-		Setting.mu.RUnlock()
-		delete(https_index,i)
-		return
-	}
+	Setting.mu.RLock()
+	rule = Setting.Config.Rules[i]
 
-	if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota {
+	if Setting.Config.Users[rule.UserID].Used > Setting.Config.Users[rule.UserID].Quota {
 		Setting.mu.RUnlock()
 		conn.Close()	
 		return
 	}
-	if Setting.Config.Rules[i].Status != "Active" && Setting.Config.Rules[i].Status != "Created" {
-		Setting.mu.RUnlock()
+
+	Setting.mu.RUnlock()
+
+	if rule.Status != "Active" && rule.Status != "Created" {
 		conn.Close()
 		return
 	}
-	dest :=Setting.Config.Rules[i].Forward
 
-	Setting.mu.RUnlock()
-	
-	backend, error := net.Dial("tcp", dest)
+	backend, error := net.Dial("tcp", rule.Forward)
 	if error != nil {
 		conn.Close()
 		return

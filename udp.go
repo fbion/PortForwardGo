@@ -44,21 +44,15 @@ func LoadUDPRules(i string){
 	
 	table := make(map[string]*UDPDistribute)
 	for {
-		Setting.mu.RLock()
-		
-		if 	rule, ok := Setting.Config.Rules[i];!ok || rule.Status == "Deleted" {
-			Setting.mu.RUnlock()
-			break
-		}
-
-		Setting.mu.RUnlock()
-
 		serv.SetDeadline(time.Now().Add(16 * time.Second))
 
 		buf := make([]byte, 32 * 1024)
 		n, addr, err := serv.ReadFrom(buf)
 		if err != nil {
-			continue
+            if err, ok := err.(net.Error); ok && err.Timeout() {
+                continue
+            }
+			break
 		}
 		buf = buf[:n]
 
@@ -76,19 +70,23 @@ func LoadUDPRules(i string){
 
 		Setting.mu.RLock()
 
-	    if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { // Check the quota
+		rule := Setting.Config.Rules[i]
+
+	    if Setting.Config.Users[rule.UserID].Used > Setting.Config.Users[rule.UserID].Quota { // Check the quota
 	    	Setting.mu.RUnlock()
 		    conn.Close()
 			continue
-	    }
-		if Setting.Config.Rules[i].Status != "Active" && Setting.Config.Rules[i].Status != "Created" {
-		   	Setting.mu.RUnlock()
+		}
+		
+		Setting.mu.RUnlock()
+		
+		if rule.Status != "Active" && rule.Status != "Created" {
 			conn.Close()
 			continue
 		}
-		go udp_handleRequest(conn,i,Setting.Config.Rules[i])
+
+		go udp_handleRequest(conn,i,rule)
 		
-		Setting.mu.RUnlock()
 		
 	}
 }

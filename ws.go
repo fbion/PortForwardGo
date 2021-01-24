@@ -42,24 +42,23 @@ func DeleteWSRules(i string){
 
 
 func WS_Handle(i string , ws *websocket.Conn){
-    Setting.mu.RLock()
+	Setting.mu.RLock()
+	rule = Setting.Config.Rules[i]
 
-	if Setting.Config.Users[Setting.Config.Rules[i].UserID].Used > Setting.Config.Users[Setting.Config.Rules[i].UserID].Quota { 			
+	if Setting.Config.Users[rule.UserID].Used > Setting.Config.Users[rule.UserID].Quota { 			
 		Setting.mu.RUnlock()
 		ws.Close()
 		return
 	}
 
-	if Setting.Config.Rules[i].Status != "Active" && Setting.Config.Rules[i].Status != "Created" {
-		Setting.mu.RUnlock()
+	Setting.mu.RUnlock()
+
+	if rule.Status != "Active" && rule.Status != "Created" {
 		ws.Close()
 		return
 	}
 
-	dest := Setting.Config.Rules[i].Forward
-    Setting.mu.RUnlock()
-
-   conn,err := net.Dial("tcp",dest)
+   conn,err := net.Dial("tcp" , rule.Forward)
    if err != nil {
 	   ws.Close()
 	   return
