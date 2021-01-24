@@ -21,7 +21,7 @@ import (
 
 var Setting CSafeRule
 
-const Version = "1.2.1"
+const Version = "1.2.2"
 
 var ConfigFile string
 var LogFile string
@@ -86,13 +86,14 @@ func main() {
 			os.Exit(0)
 		}
 	
-
-		zlog.Info("Node Version: ",Version)
+        os.Remove(LogFile)
 		logfile_writer,err := os.OpenFile(LogFile, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
         if err == nil{
 		zlog.SetOutput(logfile_writer)
 		zlog.Info("Log file location: ",LogFile)
 		}
+		
+		zlog.Info("Node Version: ",Version)
 
 		LoadMap()
 

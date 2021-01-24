@@ -6,6 +6,8 @@ import (
 	"io"
 	"wego/util/ratelimit"
 	"time"
+
+	"fmt"
 )
 
 func LoadTCPRules(i string) {
@@ -26,7 +28,9 @@ func LoadTCPRules(i string) {
 		conn, err := ln.Accept()
 
 		if err != nil {
-            if err, ok := err.(net.Error); ok && err.Timeout() {
+
+			fmt.Print(err,"\n")
+            if err, ok := err.(net.Error); ok && err.Temporary() {
                 continue
             }
 			break

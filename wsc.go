@@ -28,7 +28,7 @@ func LoadWSCRules(i string){
 		conn,err := ln.Accept()
 
 		if err != nil {
-            if err, ok := err.(net.Error); ok && err.Timeout() {
+            if err, ok := err.(net.Error); ok && err.Temporary() {
                 continue
             }
 			break

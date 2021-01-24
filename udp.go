@@ -7,6 +7,8 @@ import (
 	"io"
 	"PortForwardGo/zlog"
 	"wego/util/ratelimit"
+
+	"fmt"
 )
 
 type UDPDistribute struct {
@@ -49,7 +51,8 @@ func LoadUDPRules(i string){
 		buf := make([]byte, 32 * 1024)
 		n, addr, err := serv.ReadFrom(buf)
 		if err != nil {
-            if err, ok := err.(net.Error); ok && err.Timeout() {
+			fmt.Print(err,"\n")
+            if err, ok := err.(net.Error); ok && err.Temporary() {
                 continue
             }
 			break
