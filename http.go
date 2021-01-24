@@ -86,7 +86,7 @@ func http_handle(conn net.Conn) {
 	}
 
 	Setting.mu.RLock()       	
-	rule = Setting.Config.Rules[i]
+	rule := Setting.Config.Rules[i]
 	
 	if Setting.Config.Users[rule.UserID].Used > Setting.Config.Users[rule.UserID].Quota {
 		Setting.mu.RUnlock()
