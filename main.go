@@ -21,7 +21,7 @@ import (
 
 var Setting CSafeRule
 
-const Version = "1.2.2"
+const Version = "1.2.3"
 
 var ConfigFile string
 var LogFile string
@@ -118,7 +118,12 @@ func main() {
 	go func(){
 		if Setting.Config.EnableAPI == true {
 		zlog.Info("[HTTP API] Listening " , Setting.Config.APIPort," Path: /",md5_encode(apic.APIToken)," Method:POST")
-	    route := http.NewServeMux()
+		route := http.NewServeMux()
+		route.HandleFunc("/",func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(404)
+			io.WriteString(w,Page404)
+			return
+		})
 	    route.HandleFunc("/" + md5_encode(apic.APIToken), NewAPIConnect)
 	    err := http.ListenAndServe(":" + Setting.Config.APIPort,route)
         if err != nil {
@@ -150,16 +155,19 @@ func main() {
 func NewAPIConnect(w http.ResponseWriter, r *http.Request){
 	var NewConfig Config
 	if r.Method != "POST" {
+		w.WriteHeader(403)
 		io.WriteString(w,"Unsupport Method.")
 		return
 	}
 	postdata,_ := ioutil.ReadAll(r.Body)
 	err := json.Unmarshal(postdata,&NewConfig)
 	if(err != nil){
+	   w.WriteHeader(400)
 	   io.WriteString(w,fmt.Sprintln(err))
 	   return
 	}
 	
+	go func(){
 	Setting.mu.Lock()
 	if Setting.Config.Rules == nil{
 	Setting.Config.Rules = make(map[string]Rule)
@@ -178,19 +186,21 @@ func NewAPIConnect(w http.ResponseWriter, r *http.Request){
 			go func(index string){
 			DeleteRules(index)
 			}(index)
-			break
+			continue
     	}else if NewConfig.Rules[index].Status == "Created" {
 			Setting.Config.Rules[index] = NewConfig.Rules[index]
 			go func(index string){
 			LoadNewRules(index)
 			}(index)
-			break
+			continue
 		}else{
 			Setting.Config.Rules[index] = NewConfig.Rules[index]
-			break
+			continue
 		}
-	}
+	  }
 	Setting.mu.Unlock()
+	}()
+	w.WriteHeader(200)
 	io.WriteString(w,"Success")
 	return
 }
